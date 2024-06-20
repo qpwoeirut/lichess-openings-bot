@@ -473,6 +473,10 @@ class EngineWrapper:
         """Tell the engine to shut down."""
         self.engine.quit()
 
+    # added by qpwoeirut for lichess-openings-bot, not part of the main lichess-bot repo
+    def chat_command(self, game: model.Game, cmd: str) -> str:
+        raise NotImplementedError("")
+
 
 class UCIEngine(EngineWrapper):
     """The class used to communicate with UCI engines."""

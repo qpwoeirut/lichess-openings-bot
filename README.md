@@ -1,61 +1,28 @@
-<div align="center">
+# lichess-openings-bot
 
-  ![lichess-bot](https://github.com/lichess-bot-devs/lichess-bot-images/blob/main/lichess-bot-icon-400.png)
+A bot that plays based on the Lichess openings explorer and then uses Fairy-Stockfish.
+For casual games, users can tell the bot to play the openings of a specific Lichess player.
+Supports all Lichess variants.
 
-  <h1>lichess-bot</h1>
+## TODO
+* Figure out how to let user start game w/o waiting for 8s
+* Make sure the bot doesn't flag so easily
 
-  A bridge between [lichess.org](https://lichess.org) and bots.
-  <br>
-  <strong>[Explore lichess-bot docs »](https://github.com/lichess-bot-devs/lichess-bot/wiki)</strong>
-  <br>
-  <br>
-  [![Python Build](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-build.yml/badge.svg)](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-build.yml)
-  [![Python Test](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-test.yml/badge.svg)](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-test.yml)
-  [![Mypy](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/mypy.yml/badge.svg)](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/mypy.yml)
+## Setup
+Copy `config.yml.default` to `config.yml` and add a Lichess OAuth token to `config.yml`.
 
-</div>
+Build Fairy-Stockfish (or download a prebuilt binary), name it `fairy-stockfish`, and put it in the `./engines/` directory.
 
-## Overview
+Install Python dependencies using pip or an IDE like PyCharm.
 
-[lichess-bot](https://github.com/lichess-bot-devs/lichess-bot) is a free bridge
-between the [Lichess Bot API](https://lichess.org/api#tag/Bot) and chess engines.
+Run `python3 lichess-bot.py`. Add `-u` if you need to upgrade your account to a BOT account.
 
-With lichess-bot, you can create and operate a bot on lichess. Your bot will be able to play against humans and bots alike, and you will be able to view these games live on lichess.
 
-See also the lichess-bot [documentation](https://github.com/lichess-bot-devs/lichess-bot/wiki) for further usage help.
+# Acknowledgements
+This bot is forked from the [lichess-bot](https://github.com/lichess-bot-devs/lichess-bot) repository.
 
-## Features
-Supports:
-- Every variant and time control
-- UCI, XBoard, and Homemade engines
-- Matchmaking (challenging other bots)
-- Offering Draws and Resigning
-- Accepting move takeback requests from opponents
-- Saving games as PGN
-- Local & Online Opening Books
-- Local & Online Endgame Tablebases
+A new function called `chat_command` was added to `EngineWrapper` in `engine_wrapper.py` to facilitate chat command responses.
 
-Can run on:
-- Python 3.9 and later
-- Windows, Linux and MacOS
-- Docker
+A 8-second `time.sleep` call was added to `lichess-bot.py` to give the user time to update bot settings.
 
-## Steps
-1. [Install lichess-bot](https://github.com/lichess-bot-devs/lichess-bot/wiki/How-to-Install)
-2. [Create a lichess OAuth token](https://github.com/lichess-bot-devs/lichess-bot/wiki/How-to-create-a-Lichess-OAuth-token)
-3. [Upgrade to a BOT account](https://github.com/lichess-bot-devs/lichess-bot/wiki/Upgrade-to-a-BOT-account)
-4. [Setup the engine](https://github.com/lichess-bot-devs/lichess-bot/wiki/Setup-the-engine)
-5. [Configure lichess-bot](https://github.com/lichess-bot-devs/lichess-bot/wiki/Configure-lichess-bot)
-6. [Run lichess-bot](https://github.com/lichess-bot-devs/lichess-bot/wiki/How-to-Run-lichess%E2%80%90bot)
-
-## Advanced options
-- [Create a homemade engine](https://github.com/lichess-bot-devs/lichess-bot/wiki/Create-a-homemade-engine)
-- [Add extra customizations](https://github.com/lichess-bot-devs/lichess-bot/wiki/Extra-customizations)
-
-<br />
-
-## Acknowledgements
-Thanks to the Lichess team, especially T. Alexander Lystad and Thibault Duplessis for working with the LeelaChessZero team to get this API up. Thanks to the [Niklas Fiekas](https://github.com/niklasf) and his [python-chess](https://github.com/niklasf/python-chess) code which allows engine communication seamlessly.
-
-## License
-lichess-bot is licensed under the AGPLv3 (or any later version at your option). Check out the [LICENSE file](https://github.com/lichess-bot-devs/lichess-bot/blob/master/LICENSE) for the full text.
+`.gitignore`, `config.yml.default`, `conversation.py`, `README.md`, and `homemade.py` are the only other edited files.

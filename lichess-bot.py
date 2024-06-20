@@ -667,6 +667,8 @@ def play_game(li: LICHESS_TYPE,
                     if not is_game_over(game) and is_engine_move(game, prior_game, board):
                         disconnect_time = correspondence_disconnect_time
                         say_hello(conversation, hello, hello_spectators, board)
+                        if game.mode == "casual" and len(board.move_stack) == 0:  # give user time to !setplayer
+                            time.sleep(8)
                         setup_timer = Timer()
                         print_move_number(board)
                         move_attempted = True
@@ -1208,5 +1210,6 @@ if __name__ == "__main__":
             restart = False
             start_lichess_bot()
             time.sleep(10 if restart else 0)
-    except Exception:
+    except Exception as e:
+        raise e
         logger.exception("Quitting lichess-bot due to an error:")
