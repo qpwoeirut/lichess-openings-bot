@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import random
 from enum import Enum
-from typing import Union, Any, override, cast
+from typing import Union, Any
 
 import chess
 import yaml
@@ -12,7 +12,7 @@ from chess.engine import PlayResult
 from lib import lichess, model
 from lib.config import load_config
 from lib.engine_wrapper import MinimalEngine
-from lib.lichess_types import MOVE, InfoStrDict
+from lib.lichess_types import MOVE
 from lib.timer import seconds
 
 # Use this logger variable to print messages to the console or log files.
@@ -38,7 +38,7 @@ class OpeningsBotModeEnum(Enum):
     FAIRY_STOCKFISH = "Fairy Stockfish"
 
 
-RATINGS = [0, 400, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500]
+RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500]
 
 
 class OpeningsBotEngine(ExampleEngine):
@@ -56,7 +56,6 @@ class OpeningsBotEngine(ExampleEngine):
         self.opening_book_player_rating = 0
         self.mode = OpeningsBotModeEnum.FAIRY_STOCKFISH
 
-    @override
     def search(self, board: chess.Board, time_limit: chess.engine.Limit, ponder: bool, draw_offered: bool,
                root_moves: MOVE) -> chess.engine.PlayResult:
         """
@@ -73,9 +72,8 @@ class OpeningsBotEngine(ExampleEngine):
             time_limit.black_clock, time_limit.black_inc)
         if time_left is None or time_left > 10 * 1000 or (increment is not None and increment >= 1):
             # check opening explorer if there are at least 10s left or increment
-            move, source = self.pick_weighted_random_opening_explorer_move(board)
+            move = self.pick_weighted_random_opening_explorer_move(board)
             if move is not None:
-                self.mode = source
                 return PlayResult(move, None)
 
         result = self.engine.play(board,
@@ -92,31 +90,8 @@ class OpeningsBotEngine(ExampleEngine):
         self.mode = OpeningsBotModeEnum.FAIRY_STOCKFISH
         return result
 
-    @override
-    def add_comment(self, move: chess.engine.PlayResult, board: chess.Board) -> None:
-        """
-        Store the move's comments.
-
-        :param move: The move. Contains the comments in `move.info`.
-        :param board: The current position.
-        """
-        if self.comment_start_index < 0:
-            self.comment_start_index = len(board.move_stack)
-        move_info: InfoStrDict = cast(InfoStrDict, dict(move.info.copy() if move.info else {}))
-        if "pv" in move_info:
-            move_info["ponderpv"] = board.variation_san(move.info["pv"])
-        if "refutation" in move_info:
-            move_info["refutation"] = board.variation_san(move.info["refutation"])
-        if "currmove" in move_info:
-            move_info["currmove"] = board.san(move.info["currmove"])
-
-        move_info["Source"] = self.mode.value
-
-        self.move_commentary.append(move_info)
-
-    def pick_weighted_random_opening_explorer_move(
-            self, board: chess.Board) -> tuple[Union[None, chess.Move], Union[None, OpeningsBotModeEnum]]:
-        opening_explorer_move_list, source = self.get_opening_explorer_move_list(board)
+    def pick_weighted_random_opening_explorer_move(self, board: chess.Board) -> Union[None, chess.Move]:
+        opening_explorer_move_list = self.get_opening_explorer_move_list(board)
         moves = []
         weights = []
         for possible_move in opening_explorer_move_list:
@@ -125,12 +100,12 @@ class OpeningsBotEngine(ExampleEngine):
             weights.append(games_played)
 
         if len(moves) == 0:
-            return None, None
+            return None
 
         move = random.choices(moves, weights, k=1)[0]
-        return move, source
+        return move
 
-    def get_opening_explorer_move_list(self, board: chess.Board) -> tuple[list[dict[str, Any]], OpeningsBotModeEnum]:
+    def get_opening_explorer_move_list(self, board: chess.Board) -> list[dict[str, Any]]:
         variant = "standard" if board.uci_variant == "chess" else str(board.uci_variant)
 
         if self.opening_book_player is not None:
@@ -138,16 +113,19 @@ class OpeningsBotEngine(ExampleEngine):
                       "recentGames": 0, "color": "white" if board.turn == chess.WHITE else "black"}
             response = self.li.online_book_get("https://explorer.lichess.ovh/player", params, stream=True)
             if response["moves"]:
-                return response["moves"], OpeningsBotModeEnum.PLAYER_OPENINGS
+                self.mode = OpeningsBotModeEnum.PLAYER_OPENINGS
+                return response["moves"]
             else:  # if there's no moves found, try the general opening explorer next at the player's rating or higher
                 params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0,
                           "ratings": [rating for rating in RATINGS if rating >= self.opening_book_player_rating]}
                 response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
-                return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
+                self.mode = OpeningsBotModeEnum.GENERAL_OPENINGS
+                return response["moves"]
 
         params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0}
         response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
-        return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
+        self.mode = OpeningsBotModeEnum.GENERAL_OPENINGS
+        return response["moves"]
 
     def chat_command(self, game: model.Game, cmd: str) -> str:
         if cmd == "setplayer" or cmd.startswith("setplayer "):
