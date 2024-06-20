@@ -1,37 +1,28 @@
-# lichess-bot
-[![Python Build](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-build.yml/badge.svg)](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-build.yml)
-[![Python Test](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-test.yml/badge.svg)](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/python-test.yml)
-[![Mypy](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/mypy.yml/badge.svg)](https://github.com/lichess-bot-devs/lichess-bot/actions/workflows/mypy.yml)
+# lichess-openings-bot
 
-A bridge between [Lichess Bot API](https://lichess.org/api#tag/Bot) and bots.
+A bot that plays based on the Lichess openings explorer and then uses Fairy-Stockfish.
+For casual games, users can tell the bot to play the openings of a specific Lichess player.
+Supports all Lichess variants.
 
-## Features
-Supports:
-- Every variant and time control
-- UCI, XBoard, and Homemade engines
-- Matchmaking (challenging other bots)
-- Offering Draws and Resigning
-- Accepting move takeback requests from opponents
-- Saving games as PGN
-- Local & Online Opening Books
-- Local & Online Endgame Tablebases
+## TODO
+* Figure out how to let user start game w/o waiting for 8s
+* Make sure the bot doesn't flag so easily
 
-## Steps
-1. [Install lichess-bot](https://github.com/lichess-bot-devs/lichess-bot/wiki/How-to-Install)
-2. [Create a lichess OAuth token](https://github.com/lichess-bot-devs/lichess-bot/wiki/How-to-create-a-Lichess-OAuth-token)
-3. [Upgrade to a BOT account](https://github.com/lichess-bot-devs/lichess-bot/wiki/Upgrade-to-a-BOT-account)
-4. [Setup the engine](https://github.com/lichess-bot-devs/lichess-bot/wiki/Setup-the-engine)
-5. [Configure lichess-bot](https://github.com/lichess-bot-devs/lichess-bot/wiki/Configure-lichess-bot)
-6. [Run lichess-bot](https://github.com/lichess-bot-devs/lichess-bot/wiki/How-to-Run-lichess%E2%80%90bot)
+## Setup
+Copy `config.yml.default` to `config.yml` and add a Lichess OAuth token to `config.yml`.
 
-## Advanced options
-- [Create a homemade engine](https://github.com/lichess-bot-devs/lichess-bot/wiki/Create-a-homemade-engine)
-- [Add extra customizations](https://github.com/lichess-bot-devs/lichess-bot/wiki/Extra-customizations)
+Build Fairy-Stockfish (or download a prebuilt binary), name it `fairy-stockfish`, and put it in the `./engines/` directory.
 
-<br />
+Install Python dependencies using pip or an IDE like PyCharm.
 
-## Acknowledgements
-Thanks to the Lichess team, especially T. Alexander Lystad and Thibault Duplessis for working with the LeelaChessZero team to get this API up. Thanks to the [Niklas Fiekas](https://github.com/niklasf) and his [python-chess](https://github.com/niklasf/python-chess) code which allows engine communication seamlessly.
+Run `python3 lichess-bot.py`. Add `-u` if you need to upgrade your account to a BOT account.
 
-## License
-lichess-bot is licensed under the AGPLv3 (or any later version at your option). Check out the [LICENSE file](https://github.com/lichess-bot-devs/lichess-bot/blob/master/LICENSE) for the full text.
+
+# Acknowledgements
+This bot is forked from the [lichess-bot](https://github.com/lichess-bot-devs/lichess-bot) repository.
+
+A new function called `chat_command` was added to `EngineWrapper` in `engine_wrapper.py` to facilitate chat command responses.
+
+A 8-second `time.sleep` call was added to `lichess-bot.py` to give the user time to update bot settings.
+
+`.gitignore`, `config.yml.default`, `conversation.py`, `README.md`, and `homemade.py` are the only other edited files.
