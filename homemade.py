@@ -38,7 +38,7 @@ class OpeningsBotModeEnum(Enum):
     FAIRY_STOCKFISH = "Fairy Stockfish"
 
 
-RATINGS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500]
+RATINGS = [0, 400, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500]
 
 
 class OpeningsBotEngine(ExampleEngine):
