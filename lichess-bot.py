@@ -648,6 +648,10 @@ def play_game(li: LICHESS_TYPE,
         game_stream = itertools.chain([json.dumps(game.state).encode("utf-8")], lines)
         quit_after_all_games_finish = config.quit_after_all_games_finish
         stay_in_game = True
+
+        if game.mode == "casual":  # give user time to !setplayer
+            time.sleep(8)
+
         while stay_in_game and (not terminated or quit_after_all_games_finish) and not force_quit:
             move_attempted = False
             try:
@@ -663,8 +667,6 @@ def play_game(li: LICHESS_TYPE,
                     if not is_game_over(game) and is_engine_move(game, prior_game, board):
                         disconnect_time = correspondence_disconnect_time
                         say_hello(conversation, hello, hello_spectators, board)
-                        if game.mode == "casual" and len(board.move_stack) == 0:  # give user time to !setplayer
-                            time.sleep(8)
                         setup_timer = Timer()
                         print_move_number(board)
                         move_attempted = True
@@ -699,6 +701,7 @@ def play_game(li: LICHESS_TYPE,
                 elif u_type == "ping" and should_exit_game(board, game, prior_game, li, is_correspondence):
                     stay_in_game = False
             except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError, ConnectionError, StopIteration) as e:
+                logger.error(e)
                 stopped = isinstance(e, StopIteration)
                 stay_in_game = not stopped and (move_attempted or game_is_active(li, game.id))
 
