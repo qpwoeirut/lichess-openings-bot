@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import random
 from enum import Enum
-from typing import Union, Any
+from typing import Union, Any, override, cast
 
 import chess
 import yaml
@@ -13,7 +13,7 @@ from lib import lichess, model
 from lib.config import load_config
 from lib.engine_wrapper import MinimalEngine
 from lib.timer import seconds
-from lib.types import MOVE
+from lib.types import MOVE, InfoStrDict
 
 # Use this logger variable to print messages to the console or log files.
 # logger.info("message") will always print "message" to the console or log file.
@@ -56,6 +56,7 @@ class OpeningsBotEngine(ExampleEngine):
         self.opening_book_player_rating = 0
         self.mode = OpeningsBotModeEnum.FAIRY_STOCKFISH
 
+    @override
     def search(self, board: chess.Board, time_limit: chess.engine.Limit, ponder: bool, draw_offered: bool,
                root_moves: MOVE) -> chess.engine.PlayResult:
         """
@@ -89,6 +90,28 @@ class OpeningsBotEngine(ExampleEngine):
 
         self.mode = OpeningsBotModeEnum.FAIRY_STOCKFISH
         return result
+
+    @override
+    def add_comment(self, move: chess.engine.PlayResult, board: chess.Board) -> None:
+        """
+        Store the move's comments.
+
+        :param move: The move. Contains the comments in `move.info`.
+        :param board: The current position.
+        """
+        if self.comment_start_index < 0:
+            self.comment_start_index = len(board.move_stack)
+        move_info: InfoStrDict = cast(InfoStrDict, dict(move.info.copy() if move.info else {}))
+        if "pv" in move_info:
+            move_info["ponderpv"] = board.variation_san(move.info["pv"])
+        if "refutation" in move_info:
+            move_info["refutation"] = board.variation_san(move.info["refutation"])
+        if "currmove" in move_info:
+            move_info["currmove"] = board.san(move.info["currmove"])
+
+        move_info["Source"] = self.mode.value
+
+        self.move_commentary.append(move_info)
 
     def pick_weighted_random_opening_explorer_move(self, board: chess.Board) -> Union[None, chess.Move]:
         opening_explorer_move_list = self.get_opening_explorer_move_list(board)
