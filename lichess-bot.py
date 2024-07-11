@@ -1,5 +1,7 @@
 """The main module that controls lichess-bot."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+
 import chess
 import chess.pgn
 from chess.variant import find_variant
@@ -26,7 +28,8 @@ import test_bot.lichess
 from lib.config import load_config, Configuration
 from lib.conversation import Conversation, ChatLine
 from lib.timer import Timer, seconds, msec, hours, to_seconds
-from lib.types import (UserProfileType, EventType, GameType, GameEventType, CONTROL_QUEUE_TYPE, CORRESPONDENCE_QUEUE_TYPE,
+from lib.types import (UserProfileType, EventType, GameType, GameEventType, CONTROL_QUEUE_TYPE,
+                       CORRESPONDENCE_QUEUE_TYPE,
                        LOGGING_QUEUE_TYPE)
 from requests.exceptions import ChunkedEncodingError, ConnectionError, HTTPError, ReadTimeout
 from rich.logging import RichHandler
@@ -37,6 +40,7 @@ from queue import Empty
 from multiprocessing.pool import Pool
 from typing import Optional, Union, TypedDict
 from types import FrameType
+
 MULTIPROCESSING_LIST_TYPE = MutableSequence[model.Challenge]
 LICHESS_TYPE = Union[lichess.Lichess, test_bot.lichess.Lichess]
 POOL_TYPE = Pool
@@ -141,7 +145,8 @@ def handle_old_logs(auto_log_filename: str) -> None:
         os.rename(auto_log_filename, old_path)
 
 
-def logging_configurer(level: int, filename: Optional[str], auto_log_filename: Optional[str], delete_old_logs: bool) -> None:
+def logging_configurer(level: int, filename: Optional[str], auto_log_filename: Optional[str],
+                       delete_old_logs: bool) -> None:
     """
     Configure the logger.
 
@@ -466,7 +471,8 @@ def accept_challenges(li: LICHESS_TYPE, challenge_queue: MULTIPROCESSING_LIST_TY
             active_games.add(chlng.id)
             log_proc_count("Queued", active_games)
         except (HTTPError, ReadTimeout) as exception:
-            if isinstance(exception, HTTPError) and exception.response is not None and exception.response.status_code == 404:
+            if isinstance(exception,
+                          HTTPError) and exception.response is not None and exception.response.status_code == 404:
                 logger.info(f"Skip missing {chlng}")
 
 
@@ -652,58 +658,63 @@ def play_game(li: LICHESS_TYPE,
         if game.mode == "casual":  # give user time to !setplayer
             time.sleep(8)
 
-        while stay_in_game and (not terminated or quit_after_all_games_finish) and not force_quit:
-            move_attempted = False
-            try:
-                upd = next_update(game_stream)
-                u_type = upd["type"] if upd else "ping"
-                if u_type == "chatLine":
-                    conversation.react(ChatLine(upd))
-                elif u_type == "gameState":
-                    game.state = upd
-                    board = setup_board(game)
-                    takeback_field = game.state.get("btakeback") if game.is_white else game.state.get("wtakeback")
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            while stay_in_game and (not terminated or quit_after_all_games_finish) and not force_quit:
+                move_attempted = False
+                try:
+                    upd = next_update(game_stream)
+                    u_type = upd["type"] if upd else "ping"
+                    if u_type == "chatLine":
+                        conversation.react(ChatLine(upd))
+                    elif u_type == "gameState":
+                        game.state = upd
+                        board = setup_board(game)
+                        takeback_field = game.state.get("btakeback") if game.is_white else game.state.get("wtakeback")
 
-                    if not is_game_over(game) and is_engine_move(game, prior_game, board):
-                        disconnect_time = correspondence_disconnect_time
-                        say_hello(conversation, hello, hello_spectators, board)
-                        setup_timer = Timer()
-                        print_move_number(board)
-                        move_attempted = True
-                        engine.play_move(board,
-                                         game,
-                                         li,
-                                         setup_timer,
-                                         move_overhead,
-                                         can_ponder,
-                                         is_correspondence,
-                                         correspondence_move_time,
-                                         engine_cfg,
-                                         fake_think_time(config, board, game))
-                        time.sleep(to_seconds(delay))
-                    elif is_game_over(game):
-                        tell_user_game_result(game, board)
-                        engine.send_game_result(game, board)
-                        conversation.send_message("player", goodbye)
-                        conversation.send_message("spectator", goodbye_spectators)
-                    elif (takeback_field
-                            and not bot_to_move(game, board)
-                            and li.accept_takeback(game.id, takebacks_accepted < max_takebacks_accepted)):
-                        takebacks_accepted += 1
-                        record_takeback(game, takebacks_accepted)
-                        engine.discard_last_move_commentary()
+                        if not is_game_over(game) and is_engine_move(game, prior_game, board):
+                            disconnect_time = correspondence_disconnect_time
+                            say_hello(conversation, hello, hello_spectators, board)
+                            setup_timer = Timer()
+                            print_move_number(board)
+                            move_attempted = True
 
-                    wbtime = upd[engine_wrapper.wbtime(board)]
-                    wbinc = upd[engine_wrapper.wbinc(board)]
-                    terminate_time = msec(wbtime) + msec(wbinc) + seconds(60)
-                    game.ping(abort_time, terminate_time, disconnect_time)
-                    prior_game = copy.deepcopy(game)
-                elif u_type == "ping" and should_exit_game(board, game, prior_game, li, is_correspondence):
-                    stay_in_game = False
-            except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError, ConnectionError, StopIteration) as e:
-                logger.error(e)
-                stopped = isinstance(e, StopIteration)
-                stay_in_game = not stopped and (move_attempted or game_is_active(li, game.id))
+                            # Do this in a thread so that we can still process chat messages
+                            executor.submit(engine.play_move,
+                                            board,
+                                            game,
+                                            li,
+                                            setup_timer,
+                                            move_overhead,
+                                            can_ponder,
+                                            is_correspondence,
+                                            correspondence_move_time,
+                                            engine_cfg,
+                                            fake_think_time(config, board, game))
+                            # This doesn't really do anything now that the update handling is threaded
+                            # time.sleep(to_seconds(delay))
+                        elif is_game_over(game):
+                            tell_user_game_result(game, board)
+                            engine.send_game_result(game, board)
+                            conversation.send_message("player", goodbye)
+                            conversation.send_message("spectator", goodbye_spectators)
+                        elif (takeback_field
+                              and not bot_to_move(game, board)
+                              and li.accept_takeback(game.id, takebacks_accepted < max_takebacks_accepted)):
+                            takebacks_accepted += 1
+                            record_takeback(game, takebacks_accepted)
+                            engine.discard_last_move_commentary()
+
+                        wbtime = upd[engine_wrapper.wbtime(board)]
+                        wbinc = upd[engine_wrapper.wbinc(board)]
+                        terminate_time = msec(wbtime) + msec(wbinc) + seconds(60)
+                        game.ping(abort_time, terminate_time, disconnect_time)
+                        prior_game = copy.deepcopy(game)
+                    elif u_type == "ping" and should_exit_game(board, game, prior_game, li, is_correspondence):
+                        stay_in_game = False
+                except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError, ConnectionError, StopIteration) as e:
+                    logger.error(e)
+                    stopped = isinstance(e, StopIteration)
+                    stay_in_game = not stopped and (move_attempted or game_is_active(li, game.id))
 
         pgn_record = try_get_pgn_game_record(li, config, game, board, engine)
     final_queue_entries(control_queue, correspondence_queue, game, is_correspondence, pgn_record)
@@ -1005,6 +1016,7 @@ def get_game_file_path(config: Configuration,
                        game_is_over: bool,
                        *, force_single: bool = False) -> str:
     """Return the path of the file where the game record will be written."""
+
     def create_valid_path(s: str) -> str:
         illegal = '<>:"/\\|?*'
         return os.path.join(config.pgn_directory, "".join(c for c in s if c not in illegal))
@@ -1091,7 +1103,8 @@ def save_pgn_record(event: EventType, config: Configuration, user_name: str) -> 
 
     os.makedirs(config.pgn_directory, exist_ok=True)
     game_path = get_game_file_path(config, game_id, white_name, black_name, user_name, game_is_over)
-    single_game_path = get_game_file_path(config, game_id, white_name, black_name, user_name, game_is_over, force_single=True)
+    single_game_path = get_game_file_path(config, game_id, white_name, black_name, user_name, game_is_over,
+                                          force_single=True)
     write_mode = "w" if game_path == single_game_path else "a"
     logger.debug(f"Writing PGN game record to: {game_path}")
     with open(game_path, write_mode) as game_file:
@@ -1119,7 +1132,8 @@ def start_lichess_bot() -> None:
     """Parse arguments passed to lichess-bot.py and starts lichess-bot."""
     parser = argparse.ArgumentParser(description="Play on Lichess with a bot")
     parser.add_argument("-u", action="store_true", help="Upgrade your account to a bot account.")
-    parser.add_argument("-v", action="store_true", help="Make output more verbose. Include all communication with lichess.")
+    parser.add_argument("-v", action="store_true",
+                        help="Make output more verbose. Include all communication with lichess.")
     parser.add_argument("--config", help="Specify a configuration file (defaults to ./config.yml).")
     parser.add_argument("-l", "--logfile", help="Record all console output to a log file.", default=None)
     parser.add_argument("--disable_auto_logging", action="store_true", help="Disable automatic logging.")
@@ -1159,6 +1173,7 @@ def start_lichess_bot() -> None:
 
 def check_python_version() -> None:
     """Raise a warning or an exception if the version isn't supported or is deprecated."""
+
     def version_numeric(version_str: str) -> list[int]:
         return [int(n) for n in version_str.split(".")]
 
