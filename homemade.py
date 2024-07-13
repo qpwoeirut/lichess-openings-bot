@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from enum import Enum
 from typing import Union, Any, override, cast
 
@@ -69,6 +70,10 @@ class OpeningsBotEngine(ExampleEngine):
         :param root_moves: If it is a list, the engine will only play a move that is in `root_moves`.
         :return: The move to play.
         """
+
+        # Pause for a little so that any chat messages are processed before the start of the game.
+        if board.halfmove_clock == 0:
+            time.sleep(0.5)
 
         time_left, increment = (time_limit.white_clock, time_limit.white_inc) if board.turn == chess.WHITE else (
             time_limit.black_clock, time_limit.black_inc)
