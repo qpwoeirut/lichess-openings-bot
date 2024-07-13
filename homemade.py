@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Union, Any, override, cast
 
 import chess
+import requests
 import yaml
 from chess.engine import PlayResult
 
@@ -158,10 +159,12 @@ class OpeningsBotEngine(ExampleEngine):
                 return "Invalid format! Use \"!setplayer <username>\" to set the opening explorer player."
             else:
                 username = parts[1]
-                self.opening_book_player = username
-                return f"Set opening explorer to \"{username}\". It may take a bit to index all games for this player."
+                self.set_opening_book_player(game, username)
+                return (f"Set opening explorer to \"{username}\". "
+                        "It may take a bit to index all games for this player, so some moves may be missing initially.")
         elif cmd == "unsetplayer":
             self.opening_book_player = None
+            self.opening_book_player_rating = 0
             return "Using general Lichess opening explorer."
         elif cmd == "mode":
             return f"Currently using {self.mode.value}."
@@ -169,19 +172,16 @@ class OpeningsBotEngine(ExampleEngine):
             return "Command not recognized!"
 
     def set_opening_book_player(self, game: model.Game, username: str) -> None:
-        # send requests to the lichess server to start indexing games for this player
-        params = {"player": username, "fen": chess.STARTING_FEN, "moves": 100, "variant": game.variant_name,
-                  "recentGames": 0, "color": "white"}
-        self.li.online_book_get("https://explorer.lichess.ovh/player", params)
-
-        params["color"] = "black"
-        self.li.online_book_get("https://explorer.lichess.ovh/player", params)
-
-        user_data = self.li.get_public_data(username)
-        if "perfs" in user_data and game.variant_name in user_data["perfs"] and "rating" in user_data["perfs"][
-            game.variant_name]:
-            self.opening_book_player_rating = user_data["perfs"][game.variant_name]["rating"]
-
         self.opening_book_player = username
+        user_data = self.li.get_public_data(username)
+        self.opening_book_player_rating = user_data["perfs"][game.variant_key]["rating"]
+
+        # send request to the lichess server to start indexing games for this player
+        params = {"player": username, "moves": 100, "variant": game.variant_name, "recentGames": 0, "color": "white"}
+        try:
+            requests.get("https://explorer.lichess.ovh/player", params=params, timeout=0.5, stream=True).close()
+        except requests.exceptions.Timeout:
+            pass
+
         # extend abort time so that lichess servers have more time to index
-        self.game.ping(seconds(60), seconds(120), seconds(120))
+        game.ping(seconds(60), seconds(120), seconds(120))
