@@ -163,6 +163,7 @@ class Game:
         self.clock_increment = msec(clock.get("increment", 0))
         self.perf_name = (game_info.get("perf") or {}).get("name", "{perf?}")
         self.variant_name = game_info["variant"]["name"]
+        self.variant_key = game_info["variant"]["key"]
         self.mode = "rated" if game_info.get("rated") else "casual"
         self.white = Player(game_info["white"])
         self.black = Player(game_info["black"])
