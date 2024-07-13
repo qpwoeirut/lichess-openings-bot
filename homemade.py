@@ -168,7 +168,8 @@ class OpeningsBotEngine(ExampleEngine):
                 username = parts[1]
                 self.set_opening_book_player(game, username)
                 return (f"Set opening explorer to \"{username}\". "
-                        "It may take a bit to index all games for this player, so some moves may be missing initially.")
+                        "It may take a bit to index all games for this player. "
+                        "If the bot fails to play a move, ensure the player's opening explorer is already indexed.")
         elif cmd == "unsetplayer":
             self.opening_book_player = None
             self.opening_book_player_rating = 0
