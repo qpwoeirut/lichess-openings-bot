@@ -181,7 +181,11 @@ class OpeningsBotEngine(ExampleEngine):
     def set_opening_book_player(self, game: model.Game, username: str) -> None:
         self.opening_book_player = username
         user_data = self.li.get_public_data(username)
-        self.opening_book_player_rating = user_data["perfs"][game.variant_key]["rating"]
+        variant = game.speed if game.variant_key == "standard" else game.variant_key
+        if variant in user_data["perfs"]:
+            self.opening_book_player_rating = user_data["perfs"][variant]["rating"]
+        else:
+            logger.info("%s not found in ratings, likely because user has played no games for this variant", variant)
 
         # send request to the lichess server to start indexing games for this player
         params = {"player": username, "moves": 100, "variant": game.variant_name, "recentGames": 0, "color": "white"}
