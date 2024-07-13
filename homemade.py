@@ -71,7 +71,7 @@ class OpeningsBotEngine(ExampleEngine):
 
         time_left, increment = (time_limit.white_clock, time_limit.white_inc) if board.turn == chess.WHITE else (
             time_limit.black_clock, time_limit.black_inc)
-        if time_left is None or time_left > 10 * 1000 or (increment is not None and increment >= 1):
+        if time_left is None or time_left > 10 or (increment is not None and increment >= 1):
             # check opening explorer if there are at least 10s left or increment
             move, source = self.pick_weighted_random_opening_explorer_move(board)
             if move is not None:
