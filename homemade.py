@@ -166,10 +166,13 @@ class OpeningsBotEngine(ExampleEngine):
                 return "Invalid format! Use \"!setplayer <username>\" to set the opening explorer player."
             else:
                 username = parts[1]
-                self.set_opening_book_player(game, username)
-                return (f"Set opening explorer to \"{username}\". "
-                        "It may take a bit to index all games for this player. "
-                        "If the bot fails to play a move, ensure the player's opening explorer is already indexed.")
+                already_indexed = self.set_opening_book_player(game, username)
+                if already_indexed:
+                    return f"Set opening explorer to \"{username}\"."
+                else:
+                    return (f"Set opening explorer to \"{username}\".\n"
+                            f"It may take a while to index all games for this player.\n"
+                            f"If the bot fails to move, ensure the player's openings are already fully indexed.")
         elif cmd == "unsetplayer":
             self.opening_book_player = None
             self.opening_book_player_rating = 0
@@ -179,7 +182,7 @@ class OpeningsBotEngine(ExampleEngine):
         else:
             return "Command not recognized!"
 
-    def set_opening_book_player(self, game: model.Game, username: str) -> None:
+    def set_opening_book_player(self, game: model.Game, username: str) -> bool:
         self.opening_book_player = username
         user_data = self.li.get_public_data(username)
         variant = game.speed if game.variant_key == "standard" else game.variant_key
@@ -190,10 +193,14 @@ class OpeningsBotEngine(ExampleEngine):
 
         # send request to the lichess server to start indexing games for this player
         params = {"player": username, "moves": 100, "variant": game.variant_name, "recentGames": 0, "color": "white"}
+        already_indexed = False
         try:
-            requests.get("https://explorer.lichess.ovh/player", params=params, timeout=0.5, stream=True).close()
+            requests.get("https://explorer.lichess.ovh/player", params=params, timeout=1, stream=True).close()
+            already_indexed = True
         except requests.exceptions.Timeout:
             pass
 
         # extend abort time so that lichess servers have more time to index
         game.ping(seconds(60), seconds(120), seconds(120))
+
+        return already_indexed
