@@ -141,8 +141,10 @@ class OpeningsBotEngine(ExampleEngine):
             if response["moves"]:
                 return response["moves"], OpeningsBotModeEnum.PLAYER_OPENINGS
             else:  # if there's no moves found, try the general opening explorer next at the player's rating or higher
+                # Passing in a list causes duplicate arguments instead of a comma-separated list
+                ratings = ','.join([str(rating) for rating in RATINGS if rating >= self.opening_book_player_rating])
                 params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0,
-                          "ratings": [rating for rating in RATINGS if rating >= self.opening_book_player_rating]}
+                          "ratings": ratings}
                 response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
                 return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
 
