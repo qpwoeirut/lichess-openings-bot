@@ -152,10 +152,20 @@ class OpeningsBotEngine(ExampleEngine):
                           "ratings": ratings}
                 response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
                 return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
+        else:
+            # Increase the quality of openings played by the bot.
+            # Low-rated players in standard chess usually know much more theory than low-rated players in variants, so
+            # standard chess has a lower threshold.
+            if variant == "standard":
+                ratings = ','.join([str(rating) for rating in RATINGS if rating >= 1600])
+            else:
+                ratings = ','.join([str(rating) for rating in RATINGS if rating >= 1800])
 
-        params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0}
-        response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
-        return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
+            # Filter out ultrabullet openings
+            speeds = ','.join(["bullet", "blitz", "rapid", "classical", "correspondence"])
+            params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0, "ratings": ratings, "speeds": speeds}
+            response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
+            return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
 
     def chat_command(self, game: model.Game, cmd: str) -> str:
         if cmd == "setplayer" or cmd.startswith("setplayer "):
