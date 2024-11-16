@@ -1229,5 +1229,5 @@ if __name__ == "__main__":
             start_lichess_bot()
             time.sleep(10 if restart else 0)
     except Exception as e:
-        raise e
         logger.exception("Quitting lichess-bot due to an error:")
+        raise e
