@@ -1,5 +1,6 @@
 """The main module that controls lichess-bot."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import chess
 import chess.pgn
 from chess.variant import find_variant
@@ -710,58 +711,65 @@ def play_game(li: lichess.Lichess,
             game_stream = itertools.chain([json.dumps(game.state).encode("utf-8")], lines)
             quit_after_all_games_finish = config.quit_after_all_games_finish
             stay_in_game = True
-            while stay_in_game and (not stop.terminated or quit_after_all_games_finish) and not stop.force_quit:
-                move_attempted = False
-                try:
-                    upd = next_update(game_stream)
-                    u_type = upd["type"] if upd else "ping"
-                    if u_type == "chatLine":
-                        conversation.react(ChatLine(upd))
-                    elif u_type == "gameState":
-                        game.state = upd
-                        board = setup_board(game)
-                        takeback_field = game.state.get("btakeback") if game.is_white else game.state.get("wtakeback")
 
-                        if not is_game_over(game) and is_engine_move(game, prior_game, board):
-                            disconnect_time = correspondence_disconnect_time
-                            say_hello(conversation, hello, hello_spectators, board)
-                            setup_timer = Timer()
-                            print_move_number(board)
-                            move_attempted = True
-                            engine.play_move(board,
-                                             game,
-                                             li,
-                                             setup_timer,
-                                             move_overhead,
-                                             can_ponder,
-                                             is_correspondence,
-                                             correspondence_move_time,
-                                             engine_cfg,
-                                             fake_think_time(config, board, game))
-                            time.sleep(to_seconds(delay))
-                        elif is_game_over(game):
-                            tell_user_game_result(game, board)
-                            engine.send_game_result(game, board)
-                            conversation.send_message("player", goodbye)
-                            conversation.send_message("spectator", goodbye_spectators)
-                        elif (takeback_field
-                                and not bot_to_move(game, board)
-                                and li.accept_takeback(game.id, takebacks_accepted < max_takebacks_accepted)):
-                            takebacks_accepted += 1
-                            record_takeback(game, takebacks_accepted)
-                            engine.discard_last_move_commentary()
+            if game.mode == "casual":  # give user time to !setplayer
+                time.sleep(8)
 
-                        wbtime = upd[engine_wrapper.wbtime(board)]
-                        wbinc = upd[engine_wrapper.wbinc(board)]
-                        terminate_time = msec(wbtime) + msec(wbinc) + seconds(60)
-                        game.ping(abort_time, terminate_time, disconnect_time)
-                        prior_game = copy.deepcopy(game)
-                    elif u_type == "ping" and should_exit_game(board, game, prior_game, li, is_correspondence):
-                        stay_in_game = False
-                except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError, RequestsConnectionError,
-                        StopIteration) as e:
-                    stopped = isinstance(e, StopIteration)
-                    stay_in_game = not stopped and (move_attempted or game_is_active(li, game.id))
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                while stay_in_game and (not stop.terminated or quit_after_all_games_finish) and not stop.force_quit:
+                    move_attempted = False
+                    try:
+                        upd = next_update(game_stream)
+                        u_type = upd["type"] if upd else "ping"
+                        if u_type == "chatLine":
+                            conversation.react(ChatLine(upd))
+                        elif u_type == "gameState":
+                            game.state = upd
+                            board = setup_board(game)
+                            takeback_field = game.state.get("btakeback") if game.is_white else game.state.get("wtakeback")
+
+                            if not is_game_over(game) and is_engine_move(game, prior_game, board):
+                                disconnect_time = correspondence_disconnect_time
+                                say_hello(conversation, hello, hello_spectators, board)
+                                setup_timer = Timer()
+                                print_move_number(board)
+                                move_attempted = True
+
+                                # Do this in a thread so that we can still process chat messages
+                                executor.submit(engine.play_move,
+                                                board,
+                                                game,
+                                                li,
+                                                setup_timer,
+                                                move_overhead,
+                                                can_ponder,
+                                                is_correspondence,
+                                                correspondence_move_time,
+                                                engine_cfg,
+                                                fake_think_time(config, board, game))
+                            elif is_game_over(game):
+                                tell_user_game_result(game, board)
+                                engine.send_game_result(game, board)
+                                conversation.send_message("player", goodbye)
+                                conversation.send_message("spectator", goodbye_spectators)
+                            elif (takeback_field
+                                    and not bot_to_move(game, board)
+                                    and li.accept_takeback(game.id, takebacks_accepted < max_takebacks_accepted)):
+                                takebacks_accepted += 1
+                                record_takeback(game, takebacks_accepted)
+                                engine.discard_last_move_commentary()
+
+                            wbtime = upd[engine_wrapper.wbtime(board)]
+                            wbinc = upd[engine_wrapper.wbinc(board)]
+                            terminate_time = msec(wbtime) + msec(wbinc) + seconds(60)
+                            game.ping(abort_time, terminate_time, disconnect_time)
+                            prior_game = copy.deepcopy(game)
+                        elif u_type == "ping" and should_exit_game(board, game, prior_game, li, is_correspondence):
+                            stay_in_game = False
+                    except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError, RequestsConnectionError,
+                            StopIteration) as e:
+                        stopped = isinstance(e, StopIteration)
+                        stay_in_game = not stopped and (move_attempted or game_is_active(li, game.id))
 
             pgn_record = try_get_pgn_game_record(li, config, game, board, engine)
         final_queue_entries(control_queue, correspondence_queue, game, is_correspondence, pgn_record, pgn_queue)
