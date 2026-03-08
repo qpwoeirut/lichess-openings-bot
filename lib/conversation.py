@@ -87,10 +87,6 @@ class Conversation:
                 self.send_reply(line, f"Challenge queue: {challengers}")
             else:
                 self.send_reply(line, "No challenges queued.")
-        else:
-            reply_lines = self.engine.chat_command(self.game, cmd).split('\n')
-            for reply_line in reply_lines:
-                self.send_reply(line, reply_line)
 
     def send_reply(self, line: ChatLine, reply: str) -> None:
         """
