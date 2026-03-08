@@ -447,7 +447,7 @@ class Lichess:
         self.api_post("cancel", challenge_id, raise_for_status=False)
 
     def online_book_get(self, path: str, params: dict[str, str | int] | None = None,
-                        stream: bool = False) -> OnlineType:
+                        stream: bool = False, headers: dict[str, str] = None) -> OnlineType:
         """Get an external move from online sources (chessdb or lichess.org)."""
         @backoff.on_exception(backoff.constant,
                               (RemoteDisconnected, RequestsConnectionError, HTTPError, ReadTimeout),
@@ -459,7 +459,7 @@ class Lichess:
                               backoff_log_level=logging.DEBUG,
                               giveup_log_level=logging.DEBUG)
         def online_book_get() -> OnlineType:
-            json_response: OnlineType = self.other_session.get(path, timeout=2, params=params, stream=stream).json()
+            json_response: OnlineType = self.other_session.get(path, timeout=2, params=params, stream=stream, headers=headers).json()
             return json_response
         return online_book_get()
 

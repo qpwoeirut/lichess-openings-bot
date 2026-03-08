@@ -14,7 +14,7 @@ from chess.engine import PlayResult
 from lib import lichess, model
 from lib.config import load_config
 from lib.engine_wrapper import MinimalEngine
-from lib.lichess_types import MOVE
+from lib.lichess_types import MOVE, InfoStrDict
 from lib.timer import seconds
 
 # Use this logger variable to print messages to the console or log files.
@@ -50,6 +50,7 @@ class OpeningsBotEngine(ExampleEngine):
         config = load_config("./config.yml")
         max_retries = config.engine.online_moves.max_retries
         self.li = lichess.Lichess(config.token, config.url, __version__, logging.INFO, max_retries)
+        self.token = config.token
 
         self.engine = chess.engine.SimpleEngine.popen_uci(
             ["engines/fairy-stockfish"], timeout=15, debug=False, setpgrp=False)
@@ -142,7 +143,7 @@ class OpeningsBotEngine(ExampleEngine):
         if self.opening_book_player is not None:
             params = {"player": self.opening_book_player, "fen": board.fen(), "moves": 100, "variant": variant,
                       "recentGames": 0, "color": "white" if board.turn == chess.WHITE else "black"}
-            response = self.li.online_book_get("https://explorer.lichess.ovh/player", params, stream=True)
+            response = self.li.online_book_get("https://explorer.lichess.ovh/player", params, stream=True, headers=self.auth_header())
             if response["moves"]:
                 return response["moves"], OpeningsBotModeEnum.PLAYER_OPENINGS
             else:  # if there's no moves found, try the general opening explorer near the player's rating or higher
@@ -150,7 +151,7 @@ class OpeningsBotEngine(ExampleEngine):
                 ratings = ','.join([str(rating) for rating in RATINGS if rating + 200 >= self.opening_book_player_rating])
                 params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0,
                           "ratings": ratings}
-                response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
+                response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params, headers=self.auth_header())
                 return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
         else:
             # Increase the quality of openings played by the bot.
@@ -164,7 +165,7 @@ class OpeningsBotEngine(ExampleEngine):
             # Filter out ultrabullet openings
             speeds = ','.join(["bullet", "blitz", "rapid", "classical", "correspondence"])
             params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0, "ratings": ratings, "speeds": speeds}
-            response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params)
+            response = self.li.online_book_get("https://explorer.lichess.ovh/lichess", params, headers=self.auth_header())
             return response["moves"], OpeningsBotModeEnum.GENERAL_OPENINGS
 
     def chat_command(self, game: model.Game, cmd: str) -> str:
@@ -214,3 +215,6 @@ class OpeningsBotEngine(ExampleEngine):
         game.ping(seconds(60), seconds(120), seconds(120))
 
         return already_indexed
+
+    def auth_header(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}"}
