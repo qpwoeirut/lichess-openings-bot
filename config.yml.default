@@ -134,7 +134,7 @@ correspondence:
   ponder: false                    # Ponder in correspondence games the bot is connected to.
 
 challenge:                         # Incoming challenges.
-  concurrency: 3                   # Number of games to play simultaneously.
+  concurrency: 2                   # Number of games to play simultaneously.
   sort_by: "first"                 # Possible values: "best" and "first".
   preference: "human"              # Possible values: "none", "human", "bot".
   accept_bot: true                 # Accepts challenges coming from other bots.
@@ -199,7 +199,7 @@ matchmaking:
   allow_matchmaking: true          # Set it to 'true' to challenge other bots.
   allow_during_games: true         # Set it to 'true' to create challenges during long games.
   challenge_variant: "random"      # If set to 'random', the bot will choose one variant from the variants enabled in 'challenge.variants'.
-  challenge_timeout: 10            # Create a challenge after being idle for 'challenge_timeout' minutes. The minimum is 1 minute.
+  challenge_timeout: 20            # Create a challenge after being idle for 'challenge_timeout' minutes. The minimum is 1 minute.
   challenge_initial_time:          # Initial time in seconds of the challenge (to be chosen at random).
     - 60
     - 120
