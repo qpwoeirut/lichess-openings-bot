@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import random
 import time
 from enum import Enum
@@ -51,8 +52,9 @@ class OpeningsBotEngine(ExampleEngine):
         max_retries = config.engine.online_moves.max_retries
         self.li = lichess.Lichess(config.token, config.url, __version__, logging.INFO, max_retries)
 
-        self.engine = chess.engine.SimpleEngine.popen_uci(
-            ["engines/fairy-stockfish"], timeout=15, debug=False, setpgrp=False)
+        self.engine = chess.engine.SimpleEngine.popen_uci(["engines/fairy-stockfish"])
+        self.engine.configure({"Threads": os.cpu_count()})
+        logger.info("Running Fairy-Stockfish with %d threads", os.cpu_count())
 
         self.opening_book_player = None
         self.opening_book_player_rating = 0
