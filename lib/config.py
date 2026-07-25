@@ -205,6 +205,7 @@ def insert_default_values(CONFIG: CONFIG_DICT_TYPE) -> None:
     set_config_default(CONFIG, "engine", "polyglot", key="min_weight", default=1)
     set_config_default(CONFIG, "engine", "polyglot", key="normalization", default="none")
     set_config_default(CONFIG, "challenge", key="concurrency", default=1)
+    set_config_default(CONFIG, "challenge", key="games_reserved_for_humans", default=0)
     set_config_default(CONFIG, "challenge", key="sort_by", default="best")
     set_config_default(CONFIG, "challenge", key="preference", default="none")
     set_config_default(CONFIG, "challenge", key="accept_bot", default=False)
@@ -218,6 +219,9 @@ def insert_default_values(CONFIG: CONFIG_DICT_TYPE) -> None:
     set_config_default(CONFIG, "challenge", key="block_list", default=[], force_empty_values=True)
     set_config_default(CONFIG, "challenge", key="online_block_list", default=[], force_empty_values=True)
     set_config_default(CONFIG, "challenge", key="allow_list", default=[], force_empty_values=True)
+    set_config_default(CONFIG, "challenge", key="min_rating", default=0, force_empty_values=True)
+    set_config_default(CONFIG, "challenge", key="max_rating", default=4000, force_empty_values=True)
+    set_config_default(CONFIG, "challenge", key="rating_difference", default=None)
     set_config_default(CONFIG, "challenge", key="max_simultaneous_games_per_user", default=5)
     set_config_default(CONFIG, "correspondence", key="checkin_period", default=600)
     set_config_default(CONFIG, "correspondence", key="move_time", default=60, force_empty_values=True)
@@ -265,6 +269,7 @@ def process_block_list(CONFIG: CONFIG_DICT_TYPE) -> None:
     """
     if CONFIG["matchmaking"]["include_challenge_block_list"]:
         CONFIG["matchmaking"]["block_list"].extend(CONFIG["challenge"]["block_list"])
+        CONFIG["matchmaking"]["online_block_list"].extend(CONFIG["challenge"]["online_block_list"])
 
 
 def log_config(CONFIG: CONFIG_DICT_TYPE, alternate_log_function: Callable[[str], Any] | None = None) -> None:
@@ -313,6 +318,15 @@ def validate_config(CONFIG: CONFIG_DICT_TYPE) -> None:
     config_warn(CONFIG["challenge"]["concurrency"] > 0, "With challenge.concurrency set to 0, the bot won't accept or create "
                                                         "any challenges.")
 
+    config_assert(0 <= CONFIG["challenge"]["games_reserved_for_humans"] <= CONFIG["challenge"]["concurrency"],
+                  "challenge.games_reserved_for_humans must be between 0 and challenge.concurrency.")
+
+    config_warn(CONFIG["challenge"]["games_reserved_for_humans"] == 0
+                or CONFIG["challenge"]["preference"] == "human",
+                'challenge.games_reserved_for_humans reserves slots for humans, but challenge.preference is not '
+                '"human", so human challenges may be stalled behind bot challenges in the queue. Set '
+                'challenge.preference to "human" to prioritize human challengers.')
+
     config_assert(CONFIG["challenge"]["sort_by"] in ["best", "first"], "challenge.sort_by can be either `first` or `best`.")
     config_assert(CONFIG["challenge"]["preference"] in ["none", "human", "bot"],
                   "challenge.preference should be `none`, `human`, or `bot`.")
@@ -323,6 +337,12 @@ def validate_config(CONFIG: CONFIG_DICT_TYPE) -> None:
         game_type = "correspondence" if setting == "days" else "real-time"
         config_warn(CONFIG["challenge"][f"min_{setting}"] <= CONFIG["challenge"][f"max_{setting}"],
                     min_max_template.format(setting=setting, game_type=game_type))
+
+    config_warn(CONFIG["challenge"]["min_rating"] <= CONFIG["challenge"]["max_rating"],
+                "challenge.max_rating < challenge.min_rating will result in no challenges being accepted.")
+    config_warn(CONFIG["challenge"].get("rating_difference") is None
+                or CONFIG["challenge"].get("rating_difference", 0) >= 0,
+                "challenge.rating_difference < 0 will result in no challenges being accepted.")
 
     matchmaking = CONFIG["matchmaking"]
     matchmaking_enabled = matchmaking["allow_matchmaking"]

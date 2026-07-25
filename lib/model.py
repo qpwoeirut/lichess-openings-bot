@@ -5,6 +5,7 @@ import logging
 import datetime
 import chess
 from enum import Enum
+from typing import ClassVar
 from lib.blocklist import OnlineBlocklist
 from lib.timer import Timer, msec, seconds, sec_str, to_msec, to_seconds, years
 from lib.config import Configuration
@@ -86,6 +87,24 @@ class Challenge:
         """Check whether the mode is supported."""
         return ("rated" if self.rated else "casual") in challenge_cfg.modes
 
+    def is_supported_rating(self, challenge_cfg: Configuration, user_profile: UserProfileType) -> bool:
+        """Check whether the challenger's rating is within the acceptable range."""
+        challenger_rating = self.challenger.rating
+        if challenger_rating is None:
+            return True
+
+        min_rating: int = challenge_cfg.min_rating
+        max_rating: int = challenge_cfg.max_rating
+        rating_diff: int | None = challenge_cfg.rating_difference
+
+        if rating_diff is not None:
+            bot_rating = user_profile.get("perfs", {}).get(self.perf_name.lower(), {}).get("rating")
+            if bot_rating:
+                min_rating = max(min_rating, bot_rating - rating_diff)
+                max_rating = min(max_rating, bot_rating + rating_diff)
+
+        return min_rating <= challenger_rating <= max_rating
+
     def is_supported_recent(self, config: Configuration, recent_bot_challenges: defaultdict[str, list[Timer]]) -> bool:
         """Check whether we have played a lot of games with this opponent recently. Only used when the opponent is a BOT."""
         # Filter out old challenges
@@ -108,7 +127,8 @@ class Challenge:
         return "" if requirement_met else decline_reason
 
     def is_supported(self, config: Configuration, recent_bot_challenges: defaultdict[str, list[Timer]],
-                     opponent_engagements: Counter[str], online_block_list: OnlineBlocklist) -> tuple[bool, str]:
+                     opponent_engagements: Counter[str], online_block_list: OnlineBlocklist,
+                     user_profile: UserProfileType) -> tuple[bool, str]:
         """Whether the challenge is supported."""
         try:
             if self.from_self:
@@ -122,6 +142,7 @@ class Challenge:
                               or self.decline_due_to(self.is_supported_time_control(config), "timeControl")
                               or self.decline_due_to(self.is_supported_variant(config), "variant")
                               or self.decline_due_to(self.is_supported_mode(config), "casual" if self.rated else "rated")
+                              or self.decline_due_to(self.is_supported_rating(config, user_profile), "generic")
                               or self.decline_due_to(self.challenger.name not in config.block_list, "generic")
                               or self.decline_due_to(self.challenger.name not in online_block_list, "generic")
                               or self.decline_due_to(self.challenger.name in allowed_opponents, "generic")
@@ -289,6 +310,29 @@ class Game:
 class Player:
     """Store information about a player."""
 
+    # Names of players known to be bots. Populated as bot players are seen
+    # (from challenge and gameFull events, which carry the title) so that any
+    # part of lichess-bot can later tell whether a player is a bot given only
+    # their name -- e.g. in the gameStart event, which omits the title.
+    bot_names: ClassVar[set[str]] = set()
+
+    @classmethod
+    def is_bot_name(cls, name: str) -> bool:
+        """Whether a player name has been seen to belong to a bot."""
+        return name in cls.bot_names
+
+    @classmethod
+    def count_bot_games(cls, active_games: dict[str, str]) -> int:
+        """
+        Count active games whose opponent is known to be a bot.
+
+        Opponent names in `active_games` may be prefixed with a title (e.g.
+        "BOT sseh-c"), while `bot_names` holds bare usernames. Compare the bare
+        username (the last whitespace-separated token) so the two match.
+        """
+        return sum(1 for name in active_games.values()
+                   if cls.is_bot_name(name.split()[-1] if name else name))
+
     def __init__(self, player_info: PlayerType) -> None:
         """:param player_info: Contains information about a player."""
         self.title = player_info.get("title")
@@ -297,6 +341,8 @@ class Player:
         self.aiLevel = player_info.get("aiLevel")
         self.is_bot = self.title == "BOT" or self.aiLevel is not None
         self.name = f"AI level {self.aiLevel}" if self.aiLevel else player_info.get("name", "")
+        if self.is_bot and self.name:
+            Player.bot_names.add(self.name)
 
     def __str__(self) -> str:
         """Get a string representation of `Player`."""

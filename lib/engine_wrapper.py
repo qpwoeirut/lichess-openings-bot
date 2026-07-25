@@ -54,7 +54,7 @@ def create_engine(engine_config: Configuration, game: model.Game | None = None) 
         for k, v in cfg.engine_options.items():
             commands.append(f"--{k}={v}" if v is not None else f"--{k}")
 
-    stderr = None if cfg.silence_stderr else subprocess.DEVNULL
+    stderr = subprocess.DEVNULL if cfg.silence_stderr else None
 
     Engine: type[UCIEngine | XBoardEngine | MinimalEngine]
     if engine_type == "xboard":
@@ -895,9 +895,8 @@ def get_lichess_cloud_move(li: lichess.Lichess, board: chess.Board, game: model.
 
     with contextlib.suppress(Exception):
         data = li.online_book_get("https://lichess.org/api/cloud-eval",
-                                  params={"fen": board.fen(),
-                                          "multiPv": multipv,
-                                          "variant": variant})
+                                  params={"fen": board.fen(), "multiPv": multipv, "variant": variant},
+                                  authenticated=True)
         if "error" not in data:
             depth = data["depth"]
             knodes = data["knodes"]
@@ -948,7 +947,7 @@ def get_opening_explorer_move(li: lichess.Lichess, board: chess.Board, game: mod
         params: dict[str, str | int]
         if source == "masters":
             params = {"fen": board.fen(), "moves": 100}
-            response = li.online_book_get("https://explorer.lichess.ovh/masters", params)
+            response = li.online_book_get("https://explorer.lichess.ovh/masters", params, authenticated=True)
             comment = {"string": "lichess-bot-source:Lichess Opening Explorer (Masters)"}
         elif source == "player":
             player = opening_explorer_cfg.player_name
@@ -956,11 +955,11 @@ def get_opening_explorer_move(li: lichess.Lichess, board: chess.Board, game: mod
                 player = game.username
             params = {"player": player, "fen": board.fen(), "moves": 100, "variant": variant,
                       "recentGames": 0, "color": "white" if side == "wtime" else "black"}
-            response = li.online_book_get("https://explorer.lichess.ovh/player", params, True)
+            response = li.online_book_get("https://explorer.lichess.ovh/player", params, stream=True, authenticated=True)
             comment = {"string": "lichess-bot-source:Lichess Opening Explorer (Player)"}
         else:
             params = {"fen": board.fen(), "moves": 100, "variant": variant, "topGames": 0, "recentGames": 0}
-            response = li.online_book_get("https://explorer.lichess.ovh/lichess", params)
+            response = li.online_book_get("https://explorer.lichess.ovh/lichess", params, authenticated=True)
             comment = {"string": "lichess-bot-source:Lichess Opening Explorer (Lichess)"}
         moves = []
         for possible_move in response["moves"]:
@@ -1047,6 +1046,31 @@ def get_egtb_move(board: chess.Board, game: model.Game, lichess_bot_tbs: Configu
     return chess.engine.PlayResult(None, None)
 
 
+def is_op1_position(board: chess.Board) -> bool:
+    """Determine if a given python-chess board represents an 'op1' 8-piece tablebase position."""
+    if len(board.piece_map()) != 8 or board.castling_rights:
+        return False
+
+    white_piece_count = chess.popcount(board.occupied_co[chess.WHITE])
+    black_piece_count = chess.popcount(board.occupied_co[chess.BLACK])
+
+    if white_piece_count <= 2 or black_piece_count <= 2:
+        return False
+
+    white_pawns = board.pieces(chess.PAWN, chess.WHITE)
+    black_pawns = board.pieces(chess.PAWN, chess.BLACK)
+
+    if not white_pawns or not black_pawns:
+        return False
+
+    for wp in white_pawns:
+        for bp in black_pawns:
+            if chess.square_file(wp) == chess.square_file(bp) and chess.square_rank(wp) < chess.square_rank(bp):
+                return True
+
+    return False
+
+
 def get_lichess_egtb_move(li: lichess.Lichess, game: model.Game, board: chess.Board, quality: str,
                           variant: str) -> tuple[str | list[str] | None, int, chess.engine.InfoDict]:
     """
@@ -1062,18 +1086,21 @@ def get_lichess_egtb_move(li: lichess.Lichess, game: model.Game, board: chess.Bo
                    "maybe-win": 1,
                    "win": 2}
     pieces = chess.popcount(board.occupied)
-    max_pieces = 7 if board.uci_variant == "chess" else 6
-    if pieces <= max_pieces:
+    max_pieces = 8 if board.uci_variant == "chess" else 6
+    metric: Literal["dtz", "dtc"] = "dtz" if pieces < 8 else "dtc"
+    is_op1 = is_op1_position(board)
+    if pieces <= max_pieces and (pieces < 8 or is_op1):
         data = li.online_book_get(f"https://tablebase.lichess.ovh/{variant}",
-                                  params={"fen": board.fen()})
+                                  params={"fen": board.fen()}, authenticated=True)
         if quality == "best":
             move = data["moves"][0]["uci"]
             wdl = name_to_wld[data["moves"][0]["category"]] * -1
-            dtz = data["moves"][0]["dtz"] * -1
+            dtz = data["moves"][0][metric] * -1
             dtm = data["moves"][0]["dtm"]
             if dtm:
                 dtm *= -1
-            logger.info(f"Got move {move} from tablebase.lichess.ovh (wdl: {wdl}, dtz: {dtz}, dtm: {dtm}) for game {game.id}")
+            logger.info(f"Got move {move} from tablebase.lichess.ovh (wdl: {wdl}, {metric}: {dtz}, dtm: {dtm})"
+                        f" for game {game.id}")
         else:  # quality == "suggest":
             best_wdl = name_to_wld[data["moves"][0]["category"]] * -1
 
@@ -1090,11 +1117,11 @@ def get_lichess_egtb_move(li: lichess.Lichess, game: model.Game, board: chess.Bo
                 best_move = possible_moves[0]
                 move = best_move["uci"]
                 wdl = name_to_wld[best_move["category"]] * -1
-                dtz = best_move["dtz"] * -1
+                dtz = best_move[metric] * -1
                 dtm = best_move["dtm"]
                 if dtm:
                     dtm *= -1
-                logger.info(f"Got move {move} from tablebase.lichess.ovh (wdl: {wdl}, dtz: {dtz}, dtm: {dtm})"
+                logger.info(f"Got move {move} from tablebase.lichess.ovh (wdl: {wdl}, {metric}: {dtz}, dtm: {dtm})"
                             f" for game {game.id}")
 
         return move, wdl, {"string": "lichess-bot-source:Lichess EGTB"}

@@ -173,6 +173,7 @@ will precede the `go` command to start thinking with `sd 5`. The other `go_comma
 ## Challenges the BOT should accept
 - `challenge`: Control what kind of games for which the bot should accept challenges. All of the following options must be satisfied by a challenge to be accepted.
   - `concurrency`: The maximum number of games to play simultaneously.
+  - `games_reserved_for_humans`: The number of game slots (out of `concurrency`) to keep open for human challengers. Bot challenges are limited to `concurrency` minus this value, so humans can still challenge the bot even when other bots are filling its games. Should be between 0 and `concurrency`. Works best with `preference` set to `"human"`.
   - `sort_by`: Whether to start games by the best rated/titled opponent `"best"` or by first-come-first-serve `"first"`.
   - `preference`: Whether to prioritize human opponents, bot opponents, or treat them equally.
   - `accept_bot`: Whether to accept challenges from other bots.
@@ -213,6 +214,9 @@ will precede the `go` command to start thinking with `sd 5`. The other `go_comma
   - `recent_bot_challenge_age`: Maximum age of a bot challenge to be considered recent in seconds
   - `max_recent_bot_challenges`: Maximum number of recent challenges that can be accepted from the same bot
   - `max_simultaneous_games_per_user`: Maximum number of games that can be played simultaneously with the same user
+  - `min_rating`: The minimum rating of the challenger to accept a challenge. The default is 0.
+  - `max_rating`: The maximum rating of the challenger to accept a challenge. The maximum rating in lichess is 4000. The default is 4000.
+  - `rating_difference`: The maximum difference in rating between the bot's rating and the challenger's rating. If set, this further restricts the range defined by `min_rating` and `max_rating`.
 
 ## Greeting
 - `greeting`: Send messages via chat to the bot's opponent. The string `{me}` will be replaced by the bot's lichess account name. The string `{opponent}` will be replaced by the opponent's lichess account name. Any other word between curly brackets will be removed. If you want to put a curly bracket in the message, use two: `{{` or `}}`.
@@ -275,7 +279,7 @@ will precede the `go` command to start thinking with `sd 5`. The other `go_comma
     The `challenge_filter` option can be useful if your matchmaking settings result in a lot of declined challenges. The bots that accept challenges will be challenged more often than those that have declined. The filter will remain until lichess-bot quits or the connection with lichess.org is reset.
   - `block_list`: An indented list of usernames of bots that will not be challenged. If this option is not present, then the list is considered empty.
   - `online_block_list`: An indented list of urls from which additional block lists are retrieved. An online block list is a plain text file where each line contains a single username. If this option is not present, then the list is considered empty.
-  - `include_challenge_block_list`: If `true`, do not send challenges to the bots listed in the `challenge: block_list`. Default is `false`.
+  - `include_challenge_block_list`: If `true`, do not send challenges to the bots listed in the `challenge: block_list` or `challenge: online_block_list`. Default is `false`.
   - `overrides`: Create variations on the matchmaking settings above for more specific circumstances. If there are any subsections under `overrides`, the settings below that will override the settings in the matchmaking section. Any settings that do not appear will be taken from the settings above. <br/> <br/>
   The overrides section must have the following:
     - Name: A unique name must be given for each override. In the example configuration below, `easy_chess960` and `no_pressure_correspondence` are arbitrary strings to name the subsections and they are unique.
