@@ -11,7 +11,7 @@ Supports all Lichess variants.
 ## Setup
 Copy `config.yml.default` to `config.yml` and add a Lichess OAuth token to `config.yml`.
 
-Build Fairy-Stockfish (or download a prebuilt binary), name it `fairy-stockfish`, and put it in the `./engines/` directory.
+Build [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) (or download a prebuilt binary), name it `fairy-stockfish`, and put it in the `./engines/` directory.
 
 Install Python dependencies using pip or an IDE like PyCharm.
 
